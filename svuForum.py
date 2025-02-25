@@ -160,8 +160,19 @@ def forum():
                 border-radius: 5px;
                 box-sizing: border-box;
             }
+            /* Hide the default file input */
             input[type="file"] {
-                margin-top: 10px;
+                display: none;
+            }
+            /* Stylized file browse button */
+            .file-label {
+                background-color: #4CAF50;
+                color: white;
+                padding: 10px 15px;
+                border-radius: 5px;
+                cursor: pointer;
+                display: inline-block;
+                margin-bottom: 10px;
             }
             .post {
                 border-bottom: 1px solid #ddd;
@@ -257,7 +268,10 @@ def forum():
                 <form method="POST" enctype="multipart/form-data">
                     <input type="text" name="title" placeholder="Post Title">
                     <textarea name="text" placeholder="What's on your mind?" rows="3"></textarea>
-                    <input type="file" name="file"><br><br>
+                    <!-- Hidden file input and custom "Browse" button -->
+                    <input type="file" name="file" id="fileUpload">
+                    <label for="fileUpload" class="file-label">Browse</label>
+                    <br><br>
                     <button type="submit" class="button">Post</button>
                 </form>
             </div>
