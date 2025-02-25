@@ -11,7 +11,8 @@ if not os.path.exists(UPLOAD_FOLDER):
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
 # In-memory storage for posts and chat messages.
-posts = []  # Each post: {id, text, filename, filetype, comments: []}
+# Each post is a dict with: id, title, text, filename, filetype, comments (list)
+posts = []
 chat_messages = []  # Each message: {username, message}
 
 
@@ -83,6 +84,7 @@ def forum():
         session['saved'] = []
     # Handle new post creation.
     if request.method == "POST":
+        title = request.form.get("title")
         text = request.form.get("text")
         file = request.files.get("file")
         filename = None
@@ -106,6 +108,7 @@ def forum():
                 filetype = 'other'
         new_post = {
             'id': get_next_post_id(),
+            'title': title,
             'text': text,
             'filename': filename,
             'filetype': filetype,
@@ -149,9 +152,10 @@ def forum():
             .chat-box {
                 margin-bottom: 30px;
             }
-            textarea {
+            input[type="text"], textarea {
                 width: 100%;
                 padding: 10px;
+                margin-bottom: 10px;
                 border: 1px solid #ccc;
                 border-radius: 5px;
                 box-sizing: border-box;
@@ -167,6 +171,12 @@ def forum():
             }
             .post:last-child {
                 border-bottom: none;
+            }
+            .post h3 {
+                margin: 0 0 5px;
+            }
+            .post p {
+                margin: 5px 0;
             }
             .post img {
                 max-width: 100%;
@@ -236,8 +246,8 @@ def forum():
                     {% endfor %}
                 </div>
                 <form id="chat-form" onsubmit="sendChatMessage(event)">
-                    <input type="text" id="chat-username" placeholder="Your name" required style="width:20%; padding:5px; margin-right:5px;">
-                    <input type="text" id="chat-input" placeholder="Type a message..." required style="width:60%; padding:5px; margin-right:5px;">
+                    <input type="text" id="chat-username" placeholder="Your name" required style="width:20%; margin-right:5px;">
+                    <input type="text" id="chat-input" placeholder="Type a message..." required style="width:60%; margin-right:5px;">
                     <button type="submit" class="button">Send</button>
                 </form>
             </div>
@@ -245,7 +255,8 @@ def forum():
             <div class="post-form">
                 <h2>Create a Post</h2>
                 <form method="POST" enctype="multipart/form-data">
-                    <textarea name="text" placeholder="What's on your mind?" rows="3"></textarea><br><br>
+                    <input type="text" name="title" placeholder="Post Title">
+                    <textarea name="text" placeholder="What's on your mind?" rows="3"></textarea>
                     <input type="file" name="file"><br><br>
                     <button type="submit" class="button">Post</button>
                 </form>
@@ -255,6 +266,7 @@ def forum():
                 <h2>Recent Posts</h2>
                 {% for post in posts %}
                     <div class="post" onclick="openOverlay({{ post.id }})">
+                        <h3>{{ post.title }}</h3>
                         <p>{{ post.text }}</p>
                         {% if post.filename and post.filetype == 'image' %}
                             <img src="{{ url_for('uploaded_file', filename=post.filename) }}" alt="Post Image" width="200">
@@ -343,7 +355,7 @@ def overlay_post(post_id):
         return "Post not found", 404
     overlay_template = '''
     <button class="close-btn" onclick="closeOverlay()">Close</button>
-    <h2>Post Detail</h2>
+    <h2>{{ post.title }}</h2>
     <p>{{ post.text }}</p>
     {% if post.filename %}
         {% if post.filetype == 'image' %}
@@ -358,8 +370,6 @@ def overlay_post(post_id):
                 <source src="{{ url_for('uploaded_file', filename=post.filename) }}">
                 Your browser does not support the audio element.
             </audio>
-        {% else %}
-            <!-- For pdf, zip, or other file types, only the download button will be shown -->
         {% endif %}
         <br><br>
         <a href="{{ url_for('uploaded_file', filename=post.filename) }}" download class="button" style="margin-top:10px; padding:10px 20px;">Download File</a>
@@ -452,6 +462,9 @@ def saved_posts():
                 border-radius: 8px;
                 box-shadow: 0 2px 4px rgba(0,0,0,0.1);
             }
+            .post h3 {
+                margin: 0 0 5px;
+            }
             .button {
                 background-color: #4CAF50;
                 color: white;
@@ -468,6 +481,7 @@ def saved_posts():
         <div class="container">
             {% for post in saved_posts_list %}
                 <div class="post">
+                    <h3>{{ post.title }}</h3>
                     <p>{{ post.text }}</p>
                     {% if post.filename and post.filetype == 'image' %}
                         <img src="{{ url_for('uploaded_file', filename=post.filename) }}" alt="Post Image" width="200">
