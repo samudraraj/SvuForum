@@ -14,9 +14,9 @@ app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 # In-memory storage.
 # Each post: { id, title, text, filename, filetype, comments (list), upvotes, downvotes }
 posts = []
-# Each comment or reply: { id, text, replies (list), upvotes, downvotes }
+# Each comment/reply: { id, text, replies (list), upvotes, downvotes }
 comment_id_counter = 1
-chat_messages = []  # Each message: { username, message }
+chat_messages = []  # List of messages; each: { username, message }
 
 
 def get_next_post_id():
@@ -44,7 +44,7 @@ def find_comment(comments, comment_id):
 # ------------------ Homepage ------------------
 @app.route("/")
 def homepage():
-    template = '''
+    homepage_template = '''
     <!DOCTYPE html>
     <html>
     <head>
@@ -69,7 +69,7 @@ def homepage():
     </body>
     </html>
     '''
-    return render_template_string(template)
+    return render_template_string(homepage_template)
 
 
 # ------------------ Forum Page ------------------
@@ -77,7 +77,7 @@ def homepage():
 def forum():
     if 'saved' not in session:
         session['saved'] = []
-    # Handle new post submission.
+    # Handle new post creation.
     if request.method == "POST":
         title = request.form.get("title")
         text = request.form.get("text")
@@ -213,6 +213,23 @@ def forum():
             <a href="{{ url_for('saved_posts') }}" class="button">View Saved Posts</a>
         </div>
         <script>
+            // Chat polling function to refresh chat messages every 5 seconds.
+            function refreshChat() {
+                fetch('/chat', { method: 'GET' })
+                .then(response => response.json())
+                .then(data => {
+                    let chatDiv = document.getElementById('chat-messages');
+                    chatDiv.innerHTML = '';
+                    data.forEach(function(msg) {
+                        let newMsg = document.createElement('div');
+                        newMsg.className = 'chat-message';
+                        newMsg.innerHTML = '<strong>' + msg.username + ':</strong> ' + msg.message;
+                        chatDiv.appendChild(newMsg);
+                    });
+                })
+                .catch(err => console.error(err));
+            }
+            setInterval(refreshChat, 5000);
             function sendChatMessage(event) {
                 event.preventDefault();
                 const username = document.getElementById('chat-username').value;
@@ -224,11 +241,7 @@ def forum():
                 })
                 .then(response => response.json())
                 .then(data => {
-                    let chatDiv = document.getElementById('chat-messages');
-                    let newMsg = document.createElement('div');
-                    newMsg.className = 'chat-message';
-                    newMsg.innerHTML = '<strong>' + data.username + ':</strong> ' + data.message;
-                    chatDiv.appendChild(newMsg);
+                    refreshChat();
                     document.getElementById('chat-input').value = '';
                 })
                 .catch(err => console.error(err));
@@ -529,6 +542,21 @@ def saved_posts():
     return render_template_string(saved_template, saved_posts_list=saved_posts_list)
 
 
+# ------------------ Chat Integration ------------------
+@app.route('/chat', methods=["GET", "POST"])
+def chat():
+    if request.method == "POST":
+        data = request.get_json(force=True)
+        username = data.get("username", "Anonymous")
+        message = data.get("message", "")
+        if message:
+            new_message = {"username": username, "message": message}
+            chat_messages.append(new_message)
+            return jsonify(new_message)
+        return jsonify({"error": "No message provided"}), 400
+    else:  # GET
+        return jsonify(chat_messages)
+
+
 if __name__ == '__main__':
-    # Listen on all interfaces.
     app.run(debug=True, host='0.0.0.0')
