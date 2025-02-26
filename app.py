@@ -24,7 +24,7 @@ comment_id_counter = 1
 chat_messages = []  # Each: { username, message }
 
 # Dummy user data for login.
-# In production, use a database with proper password hashing.
+# In production, use a persistent database with proper password hashing.
 users = {
     "admin": "adminpass",
     "user": "userpass"
@@ -148,9 +148,8 @@ def signup():
         elif password != confirm_password:
             error = "Passwords do not match."
         else:
-            # Register the user.
             users[username] = password
-            session['user'] = username  # Automatically log in the user.
+            session['user'] = username  # Auto-login after sign up.
             return redirect(url_for('forum'))
     return render_template_string(signup_template, error=error)
 
@@ -198,7 +197,7 @@ def forum():
     """
     Render the forum page.
     - Handles new post submissions.
-    - Displays posts along with an integrated chat.
+    - Displays posts along with integrated chat.
     - Includes a navbar with login, logout, and sign-up links.
     - Clicking on a post opens an overlay with post details.
     """
@@ -207,7 +206,6 @@ def forum():
 
     # Handle new post creation.
     if request.method == "POST":
-        # Ensure the user is logged in to create a post.
         if 'user' not in session:
             return redirect(url_for('login'))
         title = request.form.get("title", "").strip()
@@ -310,6 +308,8 @@ def forum():
                 .container { padding: 10px; }
                 .button { padding: 8px 12px; }
             }
+            /* Additional styling for comment/reply forms */
+            .comment-form, .reply-form { margin-top: 10px; }
         </style>
     </head>
     <body>
@@ -474,11 +474,7 @@ def forum():
             // Toggle reply form visibility.
             function toggleReplyForm(commentId) {
                 var form = document.getElementById('reply-form-' + commentId);
-                if (form.style.display === 'none' || form.style.display === '') {
-                    form.style.display = 'block';
-                } else {
-                    form.style.display = 'none';
-                }
+                form.style.display = (form.style.display === 'none' || form.style.display === '') ? 'block' : 'none';
             }
             // Show post overlay by fetching its details.
             function showPostOverlay(postId) {
@@ -494,6 +490,34 @@ def forum():
             function closeOverlay() {
                 document.getElementById('post-overlay').style.display = 'none';
             }
+            // Submit comment via AJAX.
+            function submitComment(event, postId) {
+                event.preventDefault();
+                const form = event.target;
+                const formData = new FormData(form);
+                fetch('/comment/' + postId, {
+                    method: 'POST',
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(data => { showPostOverlay(postId); })
+                .catch(err => console.error(err));
+            }
+            // Submit reply via AJAX.
+            function submitReply(event, postId, commentId) {
+                event.preventDefault();
+                const form = event.target;
+                const formData = new FormData(form);
+                fetch('/reply/' + postId + '/' + commentId, {
+                    method: 'POST',
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(data => { showPostOverlay(postId); })
+                .catch(err => console.error(err));
+            }
         </script>
     </body>
     </html>
@@ -506,7 +530,7 @@ def forum():
 def post_overlay(post_id: int):
     """
     Returns the post detail view as an HTML fragment to be displayed in an overlay.
-    This view includes the post, media, AJAX voting, and nested comments with reply forms.
+    Includes the post content, media, AJAX voting, and nested comments with AJAX-enabled reply forms.
     """
     post = next((p for p in posts if p['id'] == post_id), None)
     if not post:
@@ -542,7 +566,7 @@ def post_overlay(post_id: int):
       <hr>
       <h3>Add a Comment</h3>
       {% if session.get('user') %}
-      <form action="{{ url_for('comment', post_id=post.id) }}" method="POST">
+      <form class="comment-form" onsubmit="submitComment(event, {{ post.id }})">
         <textarea name="comment" placeholder="Add a comment" rows="2"></textarea><br>
         <button type="submit" class="button" style="margin-top:5px;">Submit Comment</button>
       </form>
@@ -559,8 +583,8 @@ def post_overlay(post_id: int):
             <button onclick="voteComment({{ post.id }}, {{ comment.id }}, 'down', this)">Downvote</button>
             <button onclick="toggleReplyForm({{ comment.id }})">Reply</button>
           </div>
-          <div id="reply-form-{{ comment.id }}" style="display:none; margin-top:5px;">
-            <form action="{{ url_for('reply', post_id=post.id, comment_id=comment.id) }}" method="POST">
+          <div id="reply-form-{{ comment.id }}" class="reply-form" style="display:none; margin-top:5px;">
+            <form onsubmit="submitReply(event, {{ post.id }}, {{ comment.id }})">
               <textarea name="reply" placeholder="Your reply" rows="2"></textarea>
               <button type="submit" class="button">Submit Reply</button>
             </form>
@@ -602,6 +626,8 @@ def comment(post_id: int):
             'downvotes': 0
         }
         post.setdefault('comments', []).append(new_comment)
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return jsonify(success=True)
     return redirect(url_for('post_overlay', post_id=post_id))
 
 
@@ -621,6 +647,8 @@ def reply(post_id: int, comment_id: int):
                 'downvotes': 0
             }
             parent_comment.setdefault('replies', []).append(new_reply)
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return jsonify(success=True)
     return redirect(url_for('post_overlay', post_id=post_id))
 
 
